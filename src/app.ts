@@ -58,7 +58,7 @@ const pollGame = async (game: any) => {
     });
 }
 
-app.get('/games', async (req, res, next) => {
+app.get('/api/v1/games', async (req, res, next) => {
   try {
     const [games] = await getGames();
     res
@@ -70,7 +70,7 @@ app.get('/games', async (req, res, next) => {
   }
 });
 
-app.get('/games/:id', async (req, res, next) => {
+app.get('/api/v1/games/:id', async (req, res, next) => {
   try {
     const game_id = req.params.id;
     const game = await getGame(game_id);
@@ -80,7 +80,7 @@ app.get('/games/:id', async (req, res, next) => {
   }
 });
 
-app.delete('/games/:id', async (req, res, next) => {
+app.delete('/api/v1/games/:id', async (req, res, next) => {
   try {
     const game_id = req.params.id;
     await deleteGame(game_id);
@@ -90,7 +90,7 @@ app.delete('/games/:id', async (req, res, next) => {
   }
 });
 
-app.post('/games', async (req, res, next) => {
+app.post('/api/v1/games', async (req, res, next) => {
   try {
     const game = req.body;
     await insertGame(game.game_id, game.webhook_url);
@@ -100,7 +100,7 @@ app.post('/games', async (req, res, next) => {
   }
 });
 
-app.post('/run', async (req, res, next) => {
+app.post('/api/v1 /run', async (req, res, next) => {
   try {
     const [games] = await getGames();
     Promise.all(games.map(async game => {
