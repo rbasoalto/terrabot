@@ -1,7 +1,5 @@
-'use strict';
-
-const express = require('express');
-const crypto = require('crypto');
+import express from "express";
+import { Datastore } from "@google-cloud/datastore";
 
 const app = express();
 app.enable('trust proxy');
@@ -9,13 +7,12 @@ app.enable('trust proxy');
 app.use(express.json());
 app.use(express.urlencoded());
 
-const {Datastore} = require('@google-cloud/datastore');
 const datastore = new Datastore();
 
 const fetch = require('node-fetch');
 const {URLSearchParams} = require('url');
 
-const insertGame = (game_id, webhook_url) => {
+const insertGame = (game_id: string, webhook_url: string) => {
   return datastore.save({
     key: datastore.key(['game', game_id]),
     data: {
@@ -34,28 +31,28 @@ const getGames = () => {
   return datastore.runQuery(query);
 }
 
-const getGame = (game_id) => {
+const getGame = (game_id: string) => {
   return datastore.get(datastore.key(['game', game_id]));
 }
 
-const deleteGame = (game_id) => {
+const deleteGame = (game_id: string) => {
   return datastore.delete(datastore.key(['game', game_id]));
 }
 
-const pollGame = async (game) => {
+const pollGame = async (game: any) => {
   const game_url = 'https://terra.snellman.net/app/view-game/';
   let game_req_params = new URLSearchParams();
   game_req_params.append('game', game.game_id);
   await fetch(game_url, {method: 'POST', body: game_req_params})
-    .then(res => res.json())
-    .then(game_state => {
+    .then((res: any) => res.json())
+    .then((game_state: any) => {
       const action_required = game_state.action_required;
       console.log(action_required);
       const msg = action_required
-        .map(action => `${action.faction || action.player} => ${action.type}`)
+        .map((action: any) => `${action.faction || action.player} => ${action.type}`)
         .join('\n');
       return fetch(game.webhook_url, {method: 'POST', body: JSON.stringify({text: msg}), headers: {'Content-Type': 'application/json'}});
-    }).catch(error => {
+    }).catch((error: Error) => {
       console.log(error)
       throw error
     });
@@ -124,4 +121,4 @@ app.listen(PORT, () => {
   console.log('Press Ctrl+C to quit.');
 });
 
-module.exports = app;
+export default app;
