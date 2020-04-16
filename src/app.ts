@@ -6,16 +6,19 @@ import { URLSearchParams } from "url";
 import { Datastore } from "@google-cloud/datastore";
 import connect_datastore from "@google-cloud/connect-datastore";
 import passport from "passport";
-import { Strategy as GoogleStrategy} from "passport-google-oauth20";
+import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 
-import {UserId, User} from "./user";
+import { UserId, User } from "./user";
+import { Game } from "./game";
 
 import secrets from "../secrets.json";
 import { eventNames } from "cluster";
 import { runInNewContext } from "vm";
 
 const DatastoreSessionStore = connect_datastore(session);
-const datastore = new Datastore();
+const datastore = new Datastore({
+  namespace: 'terrabot',
+});
 const app = express();
 app.enable('trust proxy');
 
@@ -43,7 +46,7 @@ passport.use(new GoogleStrategy({
   clientSecret: secrets.auth.google.client_secret,
   callbackURL: `${BASE_URL}/auth/google/callback`,
 }, (access_token, refresh_token, profile, done) => {
-  const user_id: UserId = {provider: profile.provider, id: profile.id};
+  const user_id: UserId = { provider: profile.provider, id: profile.id };
   const user = new User({
     user_id: user_id,
     name: profile.displayName,
@@ -61,7 +64,7 @@ const apiAuthenticationRequired = (req: Request, res: Response, next: NextFuncti
   if (user && user.is_admin) {
     next();
   } else {
-    res.status(401).json({status: "Authorization Required"});
+    res.status(401).json({ status: "Authorization Required" });
   }
 };
 
@@ -104,26 +107,28 @@ const insertGame = (game_id: string, webhook_url: string) => {
 const getGames = async (limit?: number) => {
   let query = datastore
     .createQuery('game')
-    .order('created_at', {descending: true});
-    if (limit) {
-      query.limit(limit);
-    }
+    .order('created_at', { descending: true });
+  if (limit) {
+    query.limit(limit);
+  }
   return datastore.runQuery(query);
 }
 
-const getGame = (game_id: string) => {
-  return datastore.get(datastore.key(['game', game_id]));
+const getGame = async (game_id: string): Promise<Game> => {
+  const [game] = await datastore.get(datastore.key(['game', game_id]));
+  return game
 }
 
 const deleteGame = (game_id: string) => {
   return datastore.delete(datastore.key(['game', game_id]));
 }
 
-const pollGame = async (game: any) => {
+const pollGame = async (game: Game) => {
   const game_url = 'https://terra.snellman.net/app/view-game/';
   let game_req_params = new URLSearchParams();
   game_req_params.append('game', game.game_id);
-  await fetch(game_url, {method: 'POST', body: game_req_params})
+  const now = new Date();
+  fetch(game_url, { method: 'POST', body: game_req_params })
     .then((res: any) => res.json())
     .then((game_state: any) => {
       const action_required = game_state.action_required;
@@ -131,7 +136,20 @@ const pollGame = async (game: any) => {
       const msg = action_required
         .map((action: any) => `${action.faction || action.player} => ${action.type}`)
         .join('\n');
-      return fetch(game.webhook_url, {method: 'POST', body: JSON.stringify({text: msg}), headers: {'Content-Type': 'application/json'}});
+      const time_since_update = game_state.metadata.time_since_update;
+      let approx_time_of_update = now;
+      approx_time_of_update.setSeconds(approx_time_of_update.getSeconds() - time_since_update - 5 /*slop*/);
+      if (!game.last_polled_at || game.last_polled_at < approx_time_of_update) {
+        return fetch(game.webhook_url, { method: 'POST', body: JSON.stringify({ text: msg }), headers: { 'Content-Type': 'application/json' } }).then((_) => {
+          // Update the last poll
+          let updated_game = game
+          updated_game.last_polled_at = now;
+          return datastore.update({
+            key: datastore.key(['game', game.game_id]),
+            data: updated_game,
+          });
+        });
+      }
     }).catch((error: Error) => {
       console.log(error)
       throw error
@@ -164,7 +182,7 @@ app.delete('/api/v1/games/:id', apiAuthenticationRequired, async (req: Request, 
   try {
     const game_id = req.params.id;
     await deleteGame(game_id);
-    res.status(200).json({status: "OK"});
+    res.status(200).json({ status: "OK" });
   } catch (error) {
     next(error);
   }
@@ -174,8 +192,8 @@ app.post('/api/v1/games', apiAuthenticationRequired, async (req: Request, res: R
   try {
     const game = req.body;
     insertGame(game.game_id, game.webhook_url).then(value => {
-      res.status(200).json({status: "OK"});
-    }).catch(error => {throw error;});
+      res.status(200).json({ status: "OK" });
+    }).catch(error => { throw error; });
   } catch (error) {
     next(error);
   }
@@ -188,7 +206,7 @@ app.post('/api/v1/run', async (req, res, next) => {
       pollGame(game);
     }))
       .then(results => {
-        res.status(200).json({status: "OK", num_games: games.length});
+        res.status(200).json({ status: "OK", num_games: games.length });
       })
       .catch(error => { throw error; });
   } catch (error) {
@@ -198,14 +216,14 @@ app.post('/api/v1/run', async (req, res, next) => {
 
 
 app.get('/', async (req, res, next) => {
-  res.render('index', {user: req.user});
+  res.render('index', { user: req.user });
 });
 
 app.get('/login', async (req, res, next) => {
   res.render('login');
 });
 
-app.get('/auth/google', passport.authenticate('google', {scope: ['openid', 'email', 'profile']}));
+app.get('/auth/google', passport.authenticate('google', { scope: ['openid', 'email', 'profile'] }));
 
 app.get('/auth/google/callback', passport.authenticate('google', { failureRedirect: '/login' }), (req, res) => {
   const auth_redirect = req.session.auth_redirect || '/';
