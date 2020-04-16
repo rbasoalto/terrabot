@@ -123,37 +123,47 @@ const deleteGame = (game_id: string) => {
   return datastore.delete(datastore.key(['game', game_id]));
 }
 
-const pollGame = async (game: Game) => {
+const subtractSeconds = (base: Date, delta_seconds: number): Date => {
+  let result = base;
+  result.setSeconds(result.getSeconds() - delta_seconds);
+  return result;
+}
+
+const sendMessage = async (game: Game, game_state: any) => {
+  const action_required = game_state.action_required;
+  const msg = action_required.map((action: any) => `${action.faction || action.player} => ${action.type}`).join('\n');  
+  return await fetch(game.webhook_url, {
+    method: 'POST',
+    body: JSON.stringify({ text: msg }),
+    headers: { 'Content-Type': 'application/json' }
+  });
+}
+
+const updateGamePolledAt = async (game: Game, now: Date) => {
+  let updated_game = game;
+  updated_game.last_polled_at = now;
+  return await datastore.update({
+    key: datastore.key(['game', game.game_id]),
+    data: updated_game,
+  });
+}
+
+const pollGame = async (game: Game): Promise<number> => {
   const game_url = 'https://terra.snellman.net/app/view-game/';
   let game_req_params = new URLSearchParams();
   game_req_params.append('game', game.game_id);
   const now = new Date();
-  fetch(game_url, { method: 'POST', body: game_req_params })
-    .then((res: any) => res.json())
-    .then((game_state: any) => {
-      const action_required = game_state.action_required;
-      console.log(action_required);
-      const msg = action_required
-        .map((action: any) => `${action.faction || action.player} => ${action.type}`)
-        .join('\n');
-      const time_since_update = game_state.metadata.time_since_update;
-      let approx_time_of_update = now;
-      approx_time_of_update.setSeconds(approx_time_of_update.getSeconds() - time_since_update - 5 /*slop*/);
-      if (!game.last_polled_at || game.last_polled_at < approx_time_of_update) {
-        return fetch(game.webhook_url, { method: 'POST', body: JSON.stringify({ text: msg }), headers: { 'Content-Type': 'application/json' } }).then((_) => {
-          // Update the last poll
-          let updated_game = game
-          updated_game.last_polled_at = now;
-          return datastore.update({
-            key: datastore.key(['game', game.game_id]),
-            data: updated_game,
-          });
-        });
-      }
-    }).catch((error: Error) => {
-      console.log(error)
-      throw error
-    });
+  const game_state  = await fetch(game_url, { method: 'POST', body: game_req_params }).then(data => data.json());
+  const game_seconds_since_update = parseFloat(game_state.metadata.time_since_update);
+  const updated_at = subtractSeconds(now, game_seconds_since_update + 5 /*slop*/)
+  if (!game.last_polled_at || game.last_polled_at < updated_at) {
+    await Promise.all([
+      sendMessage(game, game_state),
+      updateGamePolledAt(game, now),
+    ]);
+    return 1;
+  }
+  return 0;
 }
 
 app.get('/api/v1/games', async (req, res, next) => {
@@ -202,13 +212,9 @@ app.post('/api/v1/games', apiAuthenticationRequired, async (req: Request, res: R
 app.post('/api/v1/run', async (req, res, next) => {
   try {
     const [games] = await getGames();
-    Promise.all(games.map(async (game: any) => {
-      pollGame(game);
-    }))
-      .then(results => {
-        res.status(200).json({ status: "OK", num_games: games.length });
-      })
-      .catch(error => { throw error; });
+    const poll_results = await Promise.all(games.map(game => pollGame(game)));
+    const num_updated_games = poll_results.reduce((acc, cur) => (acc + cur));
+    res.status(200).json({ status: "OK", num_games: num_updated_games });
   } catch (error) {
     next(error);
   }
