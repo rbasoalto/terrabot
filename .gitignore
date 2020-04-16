@@ -116,3 +116,6 @@ dist
 
 # TS generated
 dist/**/*
+
+# Secrets
+secrets.json

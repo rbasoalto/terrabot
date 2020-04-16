@@ -1,0 +1,86 @@
+<h1>Games</h1>
+<h2>Currently monitored games</h2>
+<div id="game_list_div">Loading...</div>
+<h2>Add new game</h2>
+<form id="add_game">
+    <ul>
+    <li><label>Game ID <input type="text" id="game_id"></label></li>
+    <li><label>Dynamite Webhook URL <input type="text" id="webhook_url"></label></li>
+    <li><input type="button" id="submit" value="add"></li>
+    </ul>
+    <div id="form_message"></div>
+</form>
+<hr>
+<div>{{#if user}}Logged in as {{user.name}} &lt;{{user.email}}&gt;. <a href="/logout">Logout</a>{{else}}Not logged in. <a href="/login">Login</a>{{/if}}</div>
+<script lang="javascript">
+    const getGames = async () => {
+        var game_list = document.createElement('ul');
+        fetch('/api/v1/games', {
+            method: 'get',
+            headers: {
+                'Accept': 'application/json',
+            }
+        }).then(res => res.json())
+          .then(games => {
+              games.forEach(game => {
+                  var li = document.createElement('li');
+                  var text = document.createTextNode(`${game.game_id} (${game.webhook_url})`);
+                  var delete_button = document.createElement('input');
+                  delete_button.type = 'button';
+                  delete_button.value = 'delete';
+                  delete_button.addEventListener('click', () => deleteGame(game.game_id));
+                  li.appendChild(text);
+                  li.appendChild(delete_button);
+                  game_list.appendChild(li);
+              });
+          })
+          .catch(error => {console.log(error);});
+        var game_list_div = document.createElement('div');
+        game_list_div.id = 'game_list_div';
+        game_list_div.appendChild(game_list);
+        document.querySelector('div#game_list_div').replaceWith(game_list_div);
+    };
+    const postGame = game => {
+        fetch('/api/v1/games', {
+            method: 'post',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(game),
+        })
+          .then(res => {
+            const message = res.ok ? "Game added" : `Couldn't add game: ${res.status}`;
+            document.querySelector('div#form_message').innerText = message;
+          })
+          .catch(error => {console.log(error);});
+    };
+    const addGame = () => {
+        const game_id_value = document.querySelector('input#game_id').value;
+        const webhook_url_value = document.querySelector('input#webhook_url').value;
+        if (game_id_value) {
+            postGame({
+                game_id: game_id_value,
+                webhook_url: webhook_url_value,
+            });
+            getGames();
+        }
+    };
+    const deleteGame = (game_id) => {
+        fetch(`/api/v1/games/${game_id}`, {
+            method: 'delete',
+            headers: {
+                'Accept': 'application/json',
+            },
+        }).then(res => res.json())
+          .then(data => {
+              console.log(`Game deleted! ${JSON.stringify(data)}`);
+              getGames();
+          })
+          .catch(error => {console.log(error);});
+    };
+    var submitButton = document.querySelector('#submit');
+    submitButton.addEventListener('click', addGame);
+    document.addEventListener('load', getGames);
+    (async () => {await getGames();})();
+</script>

@@ -1,16 +1,93 @@
-import express from "express";
+import express, { Request, Response, NextFunction } from "express";
+import exphbs from "express-handlebars";
+import session from "express-session";
+import fetch from "node-fetch";
+import { URLSearchParams } from "url";
 import { Datastore } from "@google-cloud/datastore";
+import connect_datastore from "@google-cloud/connect-datastore";
+import passport from "passport";
+import { Strategy as GoogleStrategy} from "passport-google-oauth20";
 
+import {UserId, User} from "./user";
+
+import secrets from "../secrets.json";
+import { eventNames } from "cluster";
+import { runInNewContext } from "vm";
+
+const DatastoreSessionStore = connect_datastore(session);
+const datastore = new Datastore();
 const app = express();
 app.enable('trust proxy');
 
 app.use(express.json());
 app.use(express.urlencoded());
+app.use(session({
+  store: new DatastoreSessionStore({
+    kind: "express-sessions",
+    expirationMs: 24 * 60 * 60 * 1000,  // 1d in ms
+    dataset: datastore,
+  }),
+  secret: 'who cares',
+}));
+app.use(passport.initialize());
+app.use(passport.session());
 
-const datastore = new Datastore();
+app.engine('handlebars', exphbs());
+app.set('view engine', 'handlebars');
+app.set('views', './src/views');
 
-const fetch = require('node-fetch');
-const {URLSearchParams} = require('url');
+const BASE_URL = process.env.BASE_URL;
+
+passport.use(new GoogleStrategy({
+  clientID: secrets.auth.google.client_id,
+  clientSecret: secrets.auth.google.client_secret,
+  callbackURL: `${BASE_URL}/auth/google/callback`,
+}, (access_token, refresh_token, profile, done) => {
+  const user_id: UserId = {provider: profile.provider, id: profile.id};
+  const user = new User({
+    user_id: user_id,
+    name: profile.displayName,
+    email: profile.emails[0].value,
+  });
+  User.findOrInsert(user).then(found_user => {
+    done(null, found_user);
+  }).catch(error => {
+    done(error);
+  })
+}));
+
+const apiAuthenticationRequired = (req: Request, res: Response, next: NextFunction) => {
+  const user: User = <User>req.user;
+  if (user && user.is_admin) {
+    next();
+  } else {
+    res.status(401).json({status: "Authorization Required"});
+  }
+};
+
+const isUserAuthenticated = (redirect?: string) => ((req: Request, res: Response, next: NextFunction) => {
+  const user: User = <User>req.user;
+  if (user && user.is_admin) {
+    next();
+  } else {
+    req.session.auth_redirect = redirect;
+    res.redirect('/login');
+  }
+});
+
+// Used to stuff a piece of information into a cookie
+passport.serializeUser((user: User, done) => {
+  done(null, user.user_id);
+});
+
+// Used to decode the received cookie and persist session
+passport.deserializeUser((user_id: UserId, done) => {
+  User.find(user_id).then(user => {
+    done(null, user);
+  }).catch(error => {
+    done(new Error(`Error deserializing session user: ${error}`));
+  })
+});
 
 const insertGame = (game_id: string, webhook_url: string) => {
   return datastore.save({
@@ -24,10 +101,13 @@ const insertGame = (game_id: string, webhook_url: string) => {
   });
 };
 
-const getGames = () => {
-  const query = datastore
+const getGames = async (limit?: number) => {
+  let query = datastore
     .createQuery('game')
     .order('created_at', {descending: true});
+    if (limit) {
+      query.limit(limit);
+    }
   return datastore.runQuery(query);
 }
 
@@ -80,39 +160,62 @@ app.get('/api/v1/games/:id', async (req, res, next) => {
   }
 });
 
-app.delete('/api/v1/games/:id', async (req, res, next) => {
+app.delete('/api/v1/games/:id', apiAuthenticationRequired, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const game_id = req.params.id;
     await deleteGame(game_id);
-    res.status(200).end();
+    res.status(200).json({status: "OK"});
   } catch (error) {
     next(error);
   }
 });
 
-app.post('/api/v1/games', async (req, res, next) => {
+app.post('/api/v1/games', apiAuthenticationRequired, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const game = req.body;
-    await insertGame(game.game_id, game.webhook_url);
-    res.status(200).end();
+    insertGame(game.game_id, game.webhook_url).then(value => {
+      res.status(200).json({status: "OK"});
+    }).catch(error => {throw error;});
   } catch (error) {
     next(error);
   }
 });
 
-app.post('/api/v1 /run', async (req, res, next) => {
+app.post('/api/v1/run', async (req, res, next) => {
   try {
     const [games] = await getGames();
-    Promise.all(games.map(async game => {
+    Promise.all(games.map(async (game: any) => {
       pollGame(game);
     }))
       .then(results => {
-        res.status(200).end();
+        res.status(200).json({status: "OK", num_games: games.length});
       })
-      .catch(error => {throw error;});
+      .catch(error => { throw error; });
   } catch (error) {
     next(error);
   }
+});
+
+
+app.get('/', async (req, res, next) => {
+  res.render('index', {user: req.user});
+});
+
+app.get('/login', async (req, res, next) => {
+  res.render('login');
+});
+
+app.get('/auth/google', passport.authenticate('google', {scope: ['openid', 'email', 'profile']}));
+
+app.get('/auth/google/callback', passport.authenticate('google', { failureRedirect: '/login' }), (req, res) => {
+  const auth_redirect = req.session.auth_redirect || '/';
+  delete req.session.auth_redirect;
+  res.redirect(auth_redirect);
+});
+
+app.get('/logout', (req, res) => {
+  req.logout();
+  res.redirect('/');
 });
 
 const PORT = process.env.PORT || 8080;
