@@ -24,7 +24,7 @@
           .then(games => {
               games.forEach(game => {
                   var li = document.createElement('li');
-                  var text = document.createTextNode(`${game.game_id} (${game.webhook_url})`);
+                  var text = document.createTextNode(`${game.game_id}, ledger length: ${game.ledger.length}, webhook url: ${game.webhook_url}`);
                   var delete_button = document.createElement('input');
                   delete_button.type = 'button';
                   delete_button.value = 'delete';

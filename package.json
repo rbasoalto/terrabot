@@ -7,7 +7,14 @@
   },
   "scripts": {
     "run": "tsc && node -r dotenv/config dist/src/app.js",
-    "start": "node dist/src/app.js"
+    "start": "node dist/src/app.js",
+    "check": "gts check",
+    "clean": "gts clean",
+    "compile": "tsc",
+    "fix": "gts fix",
+    "prepare": "npm run compile",
+    "pretest": "npm run compile",
+    "posttest": "npm run check"
   },
   "dependencies": {
     "@google-cloud/connect-datastore": "^4.0.0",
@@ -35,6 +42,8 @@
     "@typescript-eslint/parser": "^2.3.1",
     "dotenv": "^8.2.0",
     "eslint": "^6.4.0",
-    "typescript": "^3.8.3"
+    "gts": "^2.0.0",
+    "ts-node-dev": "^1.0.0-pre.44",
+    "typescript": "~3.8.0"
   }
 }
