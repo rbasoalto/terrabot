@@ -1,27 +1,29 @@
-import {LedgerEntry} from './types/terra';
+import {GameState} from './types/terra';
 import {datastore} from './storage/datastore';
 
 export interface IncompleteGame {
   game_id?: string;
   created_at?: Date;
+  updated_at?: Date;
   webhook_url?: string;
-  last_polled_at?: Date;
-  ledger?: Array<LedgerEntry>;
+  game_state?: GameState;
 }
 
 export class Game implements IncompleteGame {
   game_id: string;
   created_at: Date;
+  updated_at: Date;
   webhook_url: string;
-  last_polled_at?: Date;
-  ledger: Array<LedgerEntry>;
+  game_state?: GameState;
 
   constructor(igame: IncompleteGame) {
     this.game_id = igame.game_id || '';
     this.created_at = igame.created_at || new Date();
+    this.updated_at = igame.updated_at || this.created_at;
     this.webhook_url = igame.webhook_url || '';
-    this.last_polled_at = igame.last_polled_at || new Date(0);
-    this.ledger = igame.ledger || [];
+    if (igame.game_state) {
+      this.game_state = igame.game_state;
+    }
   }
 
   public static async insertGame(
@@ -64,7 +66,7 @@ export class Game implements IncompleteGame {
   public static async updateGame(game: Game) {
     return await datastore.update({
       key: datastore.key(['game', game.game_id]),
-      data: game,
+      data: {...game, updated_at: new Date()},
     });
   }
 }

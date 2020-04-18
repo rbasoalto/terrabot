@@ -9,6 +9,7 @@ import {Strategy as GoogleStrategy} from 'passport-google-oauth20';
 
 import {UserId, User} from './user';
 import {Game} from './game';
+import {buildMessage} from './chat';
 
 import * as secrets from '../secrets.json';
 import {GameState} from './types/terra';
@@ -93,33 +94,24 @@ passport.deserializeUser((user_id: UserId, done) => {
     });
 });
 
-const subtractSeconds = (base: Date, delta_seconds: number): Date => {
-  const result = base;
-  result.setSeconds(result.getSeconds() - delta_seconds);
-  return result;
-};
-
-const sendMessage = async (game: Game, game_state: GameState) => {
-  const action_required = game_state.action_required;
-  const msg = action_required
-    .map(action => `${action.faction || action.player} => ${action.type}`)
-    .join('\n');
+const sendMessage = async (game: Game) => {
+  const msg = buildMessage(game);
   return await fetch(game.webhook_url, {
     method: 'POST',
-    body: JSON.stringify({text: msg}),
+    body: JSON.stringify(msg),
     headers: {'Content-Type': 'application/json'},
   });
 };
 
 const hasGameChanged = (stored_game: Game, game_state: GameState): boolean => {
-  if (stored_game.ledger.length !== game_state.ledger.length) {
+  if (stored_game.game_state?.ledger.length !== game_state.ledger.length) {
     return true;
   } else {
     return false;
   }
 };
 
-const pollGame = async (game: Game): Promise<number> => {
+const pollGame = async (game: Game, force_update = false): Promise<number> => {
   const game_url = 'https://terra.snellman.net/app/view-game/';
   const game_req_params = new URLSearchParams();
   game_req_params.append('game', game.game_id);
@@ -127,10 +119,11 @@ const pollGame = async (game: Game): Promise<number> => {
     method: 'POST',
     body: game_req_params,
   }).then(data => data.json());
-  if (hasGameChanged(game, game_state)) {
+  if (hasGameChanged(game, game_state) || force_update) {
+    const updated_game: Game = {...game, game_state: game_state};
     await Promise.all([
-      sendMessage(game, game_state),
-      Game.updateGame({...game, ledger: game_state.ledger}),
+      sendMessage(updated_game),
+      Game.updateGame(updated_game),
     ]);
     return 1;
   }
@@ -168,6 +161,26 @@ app.delete(
       const game_id = req.params.id;
       await Game.delete(game_id);
       res.status(200).json({status: 'OK'});
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+app.post(
+  '/api/v1/games/:id/poll',
+  apiAuthenticationRequired,
+  async (
+    req: express.Request,
+    res: express.Response,
+    next: express.NextFunction
+  ) => {
+    const force_update = req.body.force_update || false;
+    try {
+      const game_id = req.params.id;
+      const game = await Game.get(game_id);
+      const updated = await pollGame(game, force_update);
+      res.status(200).json({status: 'OK', num_games: updated});
     } catch (error) {
       next(error);
     }
