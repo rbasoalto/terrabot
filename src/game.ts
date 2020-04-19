@@ -6,7 +6,15 @@ export interface IncompleteGame {
   created_at?: Date;
   updated_at?: Date;
   webhook_url?: string;
-  game_state?: GameState;
+  game_state?: GameState | string;
+}
+
+interface SerializedGame extends IncompleteGame {
+  game_id: string;
+  created_at: Date;
+  updated_at: Date;
+  webhook_url: string;
+  game_state?: string;
 }
 
 export class Game implements IncompleteGame {
@@ -21,7 +29,7 @@ export class Game implements IncompleteGame {
     this.created_at = igame.created_at || new Date();
     this.updated_at = igame.updated_at || this.created_at;
     this.webhook_url = igame.webhook_url || '';
-    if (igame.game_state) {
+    if (typeof igame.game_state !== 'string') {
       this.game_state = igame.game_state;
     }
   }
@@ -34,12 +42,17 @@ export class Game implements IncompleteGame {
       game_id: game_id,
       webhook_url: webhook_url,
     });
+    const game_with_serialized_state = {
+      ...game,
+      game_state: JSON.stringify(game.game_state || {}),
+    };
     console.log(JSON.stringify(game));
 
     await datastore
       .save({
         key: datastore.key(['game', game.game_id]),
-        data: game,
+        excludeFromIndexes: ['game_state'],
+        data: game_with_serialized_state,
       })
       .catch(err => {
         console.log(`failed to save game: ${err}`);
@@ -47,7 +60,10 @@ export class Game implements IncompleteGame {
       });
   }
   public static async get(game_id: string): Promise<Game> {
-    const [game] = await datastore.get(datastore.key(['game', game_id]));
+    const [game_with_serialized_state] = await datastore.get(
+      datastore.key(['game', game_id])
+    );
+    const game = this.deserializeGameState(game_with_serialized_state);
     return game;
   }
   public static async delete(game_id: string) {
@@ -60,13 +76,43 @@ export class Game implements IncompleteGame {
     if (limit) {
       query.limit(limit);
     }
-    const [games] = await datastore.runQuery(query);
+    const [games_with_serialized_states] = await datastore.runQuery(query);
+    const games = games_with_serialized_states.map(this.deserializeGameState);
     return games;
   }
-  public static async updateGame(game: Game) {
-    return await datastore.update({
-      key: datastore.key(['game', game.game_id]),
-      data: {...game, updated_at: new Date()},
-    });
+  public static async updateGame(game_to_update: Game) {
+    const game: Game = {...game_to_update, updated_at: new Date()};
+    const game_with_serialized_state = {
+      ...game,
+      game_state: JSON.stringify(game.game_state || {}),
+    };
+    console.log(`Will try to update ${JSON.stringify(game)}`);
+    try {
+      const update_result = await datastore.update({
+        key: datastore.key(['game', game.game_id]),
+        excludeFromIndexes: ['game_state'],
+        data: game_with_serialized_state,
+      });
+      console.log(
+        `Game ${game.game_id} updated in Datastore: ${JSON.stringify(
+          update_result
+        )}`
+      );
+      return update_result;
+    } catch (error) {
+      console.log(`Error updating game ${game.game_id} in Datastore: ${error}`);
+      throw error;
+    }
+  }
+
+  private static deserializeGameState(
+    game_with_serialized_state: SerializedGame
+  ): Game {
+    return {
+      ...game_with_serialized_state,
+      game_state: game_with_serialized_state.game_state
+        ? JSON.parse(game_with_serialized_state.game_state)
+        : {},
+    };
   }
 }

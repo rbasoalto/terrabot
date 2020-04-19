@@ -31,7 +31,7 @@ export interface Player {
   displayname: string;
 
   /**
-   * Some index, doesn't necessarily match position in the array.
+   * Some index, doesn't necessarily match position in the array. Maybe playing order?
    */
   index: number;
 
@@ -39,6 +39,21 @@ export interface Player {
    * Seems to be the same as index, in string form.
    */
   name: string;
+}
+
+export interface Faction {
+  /**
+   * Faction display name.
+   */
+  display: string;
+  /**
+   * Display name of player playing this faction.
+   */
+  player: string;
+  /**
+   * Username of the player playing this faction.
+   */
+  username: string;
 }
 
 export interface GameState {
@@ -50,4 +65,5 @@ export interface GameState {
   round: string;
   turn: number;
   players: Array<Player>;
+  factions: Record<string, Faction>;
 }

@@ -104,7 +104,7 @@ const sendMessage = async (game: Game) => {
 };
 
 const hasGameChanged = (stored_game: Game, game_state: GameState): boolean => {
-  if (stored_game.game_state?.ledger.length !== game_state.ledger.length) {
+  if (stored_game.game_state?.ledger?.length !== game_state.ledger.length) {
     return true;
   } else {
     return false;
@@ -118,7 +118,12 @@ const pollGame = async (game: Game, force_update = false): Promise<number> => {
   const game_state: GameState = await fetch(game_url, {
     method: 'POST',
     body: game_req_params,
-  }).then(data => data.json());
+  })
+    .then(data => data.json())
+    .catch(error => {
+      throw error;
+    });
+  console.log(`Game ${game.game_id} polled OK.`);
   if (hasGameChanged(game, game_state) || force_update) {
     const updated_game: Game = {...game, game_state: game_state};
     await Promise.all([
@@ -214,7 +219,7 @@ app.post('/api/v1/run', async (req, res, next) => {
   try {
     const games = await Game.getGames();
     const poll_results = await Promise.all(games.map(game => pollGame(game)));
-    const num_updated_games = poll_results.reduce((acc, cur) => acc + cur);
+    const num_updated_games = poll_results.reduce((acc, cur) => acc + cur, 0);
     res.status(200).json({status: 'OK', num_games: num_updated_games});
   } catch (error) {
     next(error);

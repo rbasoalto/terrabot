@@ -24,7 +24,13 @@
           .then(games => {
               games.forEach(game => {
                   var li = document.createElement('li');
-                  var text = document.createTextNode(`${game.game_id}, ledger length: ${game.game_state ? game.game_state.ledger.length : 0}, webhook url: ${game.webhook_url}`);
+                  var text = `${game.game_id}, webhook url: ${game.webhook_url}`;
+                  if (game.game_state && game.game_state.ledger) {
+                      text += `, round ${game.game_state.round} turn ${game.game_state.turn}, ledger length: ${game.game_state.ledger.length}`;
+                  } else {
+                      text += ', new';
+                  }
+                  var text_node = document.createTextNode(text);
                   var delete_button = document.createElement('input');
                   delete_button.type = 'button';
                   delete_button.value = 'delete';
@@ -33,7 +39,7 @@
                   force_update_button.type = 'button';
                   force_update_button.value = 'force update';
                   force_update_button.addEventListener('click', () => forceUpdate(game.game_id));
-                  li.appendChild(text);
+                  li.appendChild(text_node);
                   li.appendChild(delete_button);
                   li.appendChild(force_update_button);
                   game_list.appendChild(li);
