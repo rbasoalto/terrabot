@@ -90,6 +90,16 @@ class MessageMaker {
         keyValue: {
           topLabel: playerDisplayName,
           content: action.type,
+          button: {
+            textButton: {
+              text: 'PLAY',
+              onClick: {
+                openLink: {
+                  url: `https://terra.snellman.net/faction/${this.game_id}/${action.faction}/`,
+                },
+              },
+            },
+          },
         },
       });
     });
