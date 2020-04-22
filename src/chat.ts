@@ -74,7 +74,7 @@ class MessageMaker {
   }
 
   private fillGameCardAndGetSummary(card: Card): string {
-    const players_with_actions = [] as string[];
+    const players_with_actions = new Set<string>();
     // Actions required
     const actions_required: Section = {
       header: 'Actions Required',
@@ -85,7 +85,7 @@ class MessageMaker {
         action.player,
         action.faction
       );
-      players_with_actions.push(playerDisplayName);
+      players_with_actions.add(playerDisplayName);
       actions_required.widgets?.push({
         keyValue: {
           topLabel: playerDisplayName,
@@ -127,7 +127,9 @@ class MessageMaker {
         }
       });
     card.sections?.push(last_moves);
-    return 'Waiting for ' + players_with_actions.join(', ') + '.';
+    return (
+      'Waiting for ' + Array.from(players_with_actions).sort().join(', ') + '.'
+    );
   }
 
   private getPlayerOrFactionDisplayName(
