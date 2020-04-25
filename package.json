@@ -10,11 +10,13 @@
     "start": "node dist/src/app.js",
     "check": "gts check",
     "clean": "gts clean",
-    "compile": "tsc",
+    "compile": "tsc -p .",
     "fix": "gts fix",
     "prepare": "npm run compile",
     "pretest": "npm run compile",
-    "posttest": "npm run check"
+    "posttest": "npm run check",
+    "gcp-build": "tsc -p .",
+    "deploy": "gcloud app deploy"
   },
   "dependencies": {
     "@google-cloud/connect-datastore": "^4.0.0",

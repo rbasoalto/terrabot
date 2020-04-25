@@ -166,19 +166,19 @@ class MessageMaker {
 
   private makeVPChartUrl(): string {
     const vps = [];
-
-    for (const f in this.game_state.factions) {
-      vps.push({name: f, VP: this.game_state.factions[f].VP});
+    const factions = this.game_state.factions;
+    for (const f in factions) {
+      vps.push({name: factions[f].display, vp: factions[f].VP});
     }
 
-    vps.sort((a, b) => b.VP - a.VP);
+    vps.sort((a, b) => b.vp - a.vp);
 
     const labels = [];
     const points = [];
 
     for (const entry of vps) {
       labels.push(entry.name);
-      points.push(entry.VP);
+      points.push(entry.vp);
     }
     labels.reverse();
 

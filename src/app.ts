@@ -38,7 +38,8 @@ app.engine('handlebars', exphbs());
 app.set('view engine', 'handlebars');
 app.set('views', './src/views');
 
-const BASE_URL = process.env.BASE_URL;
+const BASE_URL = process.env.BASE_URL || 'http://localhost:8080';
+const APP_VERSION = process.env.GAE_VERSION || 'dev';
 
 passport.use(
   new GoogleStrategy(
@@ -227,7 +228,7 @@ app.post('/api/v1/run', async (req, res, next) => {
 });
 
 app.get('/', async (req, res) => {
-  res.render('index', {user: req.user});
+  res.render('index', {user: req.user, app_version: APP_VERSION});
 });
 
 app.get('/login', async (req, res) => {

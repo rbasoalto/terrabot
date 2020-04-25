@@ -11,7 +11,7 @@
     <div id="form_message"></div>
 </form>
 <hr>
-<div>{{#if user}}Logged in as {{user.name}} &lt;{{user.email}}&gt;. <a href="/logout">Logout</a>{{else}}Not logged in. <a href="/login">Login</a>{{/if}}</div>
+<div>{{#if user}}Logged in as {{user.name}} &lt;{{user.email}}&gt;. <a href="/logout">Logout</a>{{else}}Not logged in. <a href="/login">Login</a>{{/if}} &mdash; {{app_version}}</div>
 <script lang="javascript">
     const getGames = async () => {
         var game_list = document.createElement('ul');
