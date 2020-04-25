@@ -167,31 +167,38 @@ class MessageMaker {
   private makeVPChartUrl(): string {
     const vps = [];
     const factions = this.game_state.factions;
+    const has_projection = factions[Object.keys(factions)[0]].vp_projection
+      ? true
+      : false;
     for (const f in factions) {
-      vps.push({name: factions[f].display, vp: factions[f].VP});
+      vps.push({
+        name: factions[f].display,
+        vp: factions[f].VP,
+        projection: factions[f].vp_projection?.total,
+      });
     }
 
     vps.sort((a, b) => b.vp - a.vp);
 
-    const labels = [];
-    const points = [];
+    const reverse_vps = Array.from(vps).reverse();
 
-    for (const entry of vps) {
-      labels.push(entry.name);
-      points.push(entry.vp);
+    let chd = `t:${vps.map(v => v.vp).join(',')}`;
+    if (has_projection) {
+      chd += `|${vps.map(v => v.projection).join(',')}`;
     }
-    labels.reverse();
+
 
     const baseUrl = 'https://chart.googleapis.com/chart?';
     const params = {
-      chd: `t:${points.join(',')}`,
-      cht: 'bhs', // Bar graph, horizontal, stacked
+      chd: chd,
+      cht: 'bho', // Bar graph, horizontal, overlapped
       chds: 'a', // autoscaling
-      chm: 'N,000000,0,-1,12', // bar labels, black
+      chm:
+        'N,000000,0,-1,12,,r' + (has_projection ? '|N,999999,1,-1,12,,l' : ''), // bar labels, black
       chxt: 'y',
-      chxl: `0:|${labels.join('|')}|`, // labels (names)
-      chs: `300x${26 * labels.length + 20}`, // size
-      chco: '4D89F9', // bar colors
+      chxl: `0:|${reverse_vps.map(v => v.name).join('|')}|`, // labels (names)
+      chs: `300x${26 * vps.length + 20}`, // size
+      chco: '4D89F9' + (has_projection ? ',C6D9FD' : ''), // bar colors
     };
     const url = baseUrl + querystring.stringify(params);
     console.log(url);

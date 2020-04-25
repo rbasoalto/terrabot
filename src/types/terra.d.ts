@@ -58,6 +58,14 @@ export interface Faction {
    * Victory points
    */
   VP: number;
+  /**
+   * VP projection. Sometimes present.
+   */
+  vp_projection?: VPProjection;
+}
+
+export interface VPProjection {
+  total: number;
 }
 
 export interface GameState {
