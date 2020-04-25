@@ -54,6 +54,10 @@ export interface Faction {
    * Username of the player playing this faction.
    */
   username: string;
+  /**
+   * Victory points
+   */
+  VP: number;
 }
 
 export interface GameState {

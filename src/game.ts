@@ -86,7 +86,7 @@ export class Game implements IncompleteGame {
       ...game,
       game_state: JSON.stringify(game.game_state || {}),
     };
-    console.log(`Will try to update ${JSON.stringify(game)}`);
+    console.log(`Will try to update ${JSON.stringify(game.game_id)}`);
     try {
       const update_result = await datastore.update({
         key: datastore.key(['game', game.game_id]),

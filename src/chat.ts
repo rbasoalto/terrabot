@@ -1,6 +1,7 @@
 import {chat_v1} from 'googleapis';
 import {Game} from './game';
-import { GameState, Faction, ActionRequired, Player } from './types/terra';
+import {GameState, Faction, ActionRequired, Player} from './types/terra';
+import * as querystring from 'querystring';
 
 export type Message = chat_v1.Schema$Message;
 type Card = chat_v1.Schema$Card;
@@ -104,6 +105,8 @@ class MessageMaker {
       });
     });
     card.sections?.push(actions_required);
+    // VP chart
+    card.sections?.push(this.makeVPChartSection());
     // Last moves
     const last_moves: Section = {
       header: 'Last Moves (latest first)',
@@ -147,5 +150,51 @@ class MessageMaker {
     } else {
       return 'Unknown';
     }
+  }
+
+  private makeVPChartSection(): Section {
+    return {
+      widgets: [
+        {
+          image: {
+            imageUrl: this.makeVPChartUrl(),
+          },
+        },
+      ],
+    };
+  }
+
+  private makeVPChartUrl(): string {
+    const vps = [];
+
+    for (const f in this.game_state.factions) {
+      vps.push({name: f, VP: this.game_state.factions[f].VP});
+    }
+
+    vps.sort((a, b) => b.VP - a.VP);
+
+    const labels = [];
+    const points = [];
+
+    for (const entry of vps) {
+      labels.push(entry.name);
+      points.push(entry.VP);
+    }
+    labels.reverse();
+
+    const baseUrl = 'https://chart.googleapis.com/chart?';
+    const params = {
+      chd: `t:${points.join(',')}`,
+      cht: 'bhs', // Bar graph, horizontal, stacked
+      chds: 'a', // autoscaling
+      chm: 'N,000000,0,-1,12', // bar labels, black
+      chxt: 'y',
+      chxl: `0:|${labels.join('|')}|`, // labels (names)
+      chs: `300x${26 * labels.length + 20}`, // size
+      chco: '4D89F9', // bar colors
+    };
+    const url = baseUrl + querystring.stringify(params);
+    console.log(url);
+    return url;
   }
 }
